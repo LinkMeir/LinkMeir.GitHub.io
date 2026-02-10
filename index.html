@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Link Manager Meir</title>
+    <title>Link Manager Pro</title>
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="styles.css">
     <link rel="icon" type="image/png" href="icon.png">
@@ -12,59 +12,69 @@
 <body class="dark-mode">
 
     <header>
-        <h1>Link Manager <span id="mainLoader" class="loader hidden"></span></h1>
+        <h1>Link Manager Pro <span id="mainLoader" class="loader" style="display:none"></span></h1>
         <div id="itemCount">טוען...</div>
     </header>
 
     <div id="userSection" class="glass-panel">
-        <div id="loggedOutView" class="hidden" style="width:100%; justify-content:center;">
+        <div id="loggedOutView" style="display:none; width:100%; justify-content:center;">
             <button id="googleLoginBtn" class="btn-login">התחבר עם Google</button>
         </div>
-        <div id="loggedInView" class="hidden" style="width:100%; justify-content:space-between; align-items:center;">
+        <div id="loggedInView" style="display:none; width:100%; justify-content:space-between; align-items:center;">
             <div class="user-info">
                 <img id="userAvatar" src="" class="user-avatar" alt="Avatar">
                 <div>
-                    <div id="userName" class="user-name">משתמש</div>
+                    <div id="userName" class="user-name">טוען...</div>
                     <div id="syncStatus" class="cloud-status"><span class="status-dot"></span> מנותק</div>
                 </div>
             </div>
             <div>
-                <button id="switchAccountBtn" class="btn-switch" title="החלף חשבון">🔄</button>
+                <button id="switchAccountBtn" class="btn-switch">🔄</button>
                 <button id="logoutBtn" class="btn-logout">יציאה</button>
             </div>
         </div>
     </div>
 
     <div id="controlsArea" class="glass-panel">
-        <input type="search" id="searchInput" placeholder="🔍 חפש...">
+        <input type="search" id="searchInput" placeholder="🔍 חפש קישור או קטגוריה...">
         <div class="filters-container">
-            <select id="categoryFilter"><option value="">📂 הכל</option></select>
+            <select id="categoryFilter"><option value="">📂 כל הקטגוריות</option></select>
             <select id="sortOrder">
-                <option value="date-new">📅 תאריך</option>
-                <option value="name">🔤 שם</option>
+                <option value="date-new">📅 תאריך (חדש)</option>
+                <option value="name">🔤 שם (א-ת)</option>
             </select>
         </div>
         <div class="actions-container">
-            <button id="exportJsonBtn" class="action-btn btn-json">📤 ייצוא</button>
-            <button id="importJsonBtn" class="action-btn btn-json">📥 ייבוא</button>
-            <input type="file" id="importJsonInput" accept=".json" class="hidden">
-            <button id="trashBtn" class="action-btn btn-txt">🗑️ זבל</button>
+            <div class="dropdown">
+                <button class="action-btn btn-json drop-trigger" data-target="jsonMenu">📂 JSON ▼</button>
+                <div id="jsonMenu" class="dropdown-content">
+                    <label for="importJsonInput">📥 ייבוא JSON</label>
+                    <input type="file" id="importJsonInput" accept=".json" style="display:none">
+                    <button id="exportJsonBtn">📤 ייצוא JSON</button>
+                </div>
+            </div>
+            <button id="trashBtn" class="action-btn btn-txt">🗑️ סל מחזור</button>
             <button id="toggleDarkModeBtn" class="action-btn btn-toggle">☀️</button>
         </div>
     </div>
 
     <details class="glass-panel" style="margin-bottom:20px">
-        <summary style="padding:15px; cursor:pointer; font-weight:700; color:var(--primary-color); text-align:center">➕ פריט חדש</summary>
-        <form id="addItemForm" style="padding:15px; display:flex; flex-direction:column; gap:10px;">
-            <textarea id="itemContent" rows="2" required placeholder="הדבק קישור..."></textarea>
+        <summary style="padding:15px; cursor:pointer; font-weight:700; color:var(--primary-color); text-align:center">➕ הוספת פריט חדש</summary>
+        <form id="addItemForm">
+            <textarea id="itemContent" rows="2" required placeholder="קישור או טקסט..."></textarea>
             <input type="text" id="itemDescription" placeholder="תיאור">
             <input type="text" id="itemCategory" placeholder="קטגוריה">
-            <button type="submit" class="action-btn" style="background:var(--accent-green)">שמור</button>
+            <button type="submit">הוסף למאגר</button>
         </form>
     </details>
 
     <div id="listContainer"></div>
-    <div id="toast">הודעה</div>
+
+    <div id="toast">
+        <div style="padding:15px; display:flex; justify-content:space-between; align-items:center;">
+            <span id="toastMsg">הודעה</span>
+        </div>
+    </div>
 
     <script type="module" src="app.js"></script>
 </body>
