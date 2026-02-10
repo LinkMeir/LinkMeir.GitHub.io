@@ -1,9 +1,15 @@
 <!DOCTYPE html>
-<html lang="he" dir="rtl">
-<head>
+<html lang="he" dir="rtl"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Link Manager Pro - Clean Start</title>
+    
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#0f172a">
+    
+    <link rel="icon" type="image/png" href="./icon.png">
+    <link rel="apple-touch-icon" href="./icon.png">
+    
+    <title>Link Manager Pro</title>
     <style>
         :root {
             --bg-gradient: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
@@ -340,20 +346,20 @@
 <body class="dark-mode">
 
     <header>
-        <h1>Link Manager Pro <span style="font-size:0.8rem; opacity:0.7; margin-right:10px;">(Clean Start)</span></h1>
-        <div id="itemCount">טוען נתונים...</div>
+        <h1>Link Manager Pro <span style="font-size:0.8rem; opacity:0.7; margin-right:10px;">(Fixed Version)</span></h1>
+        <div id="itemCount">טוען...</div>
     </header>
 
     <div id="userSection" class="glass-panel">
-        <div id="loggedOutView" style="display:none; width:100%; justify-content:center;">
+        <div id="loggedOutView" style="display:flex; width:100%; justify-content:center;">
             <button id="googleLoginBtn" class="btn-login">התחבר עם Google לגיבוי אוטומטי</button>
         </div>
-        <div id="loggedInView" style="display:none; width:100%; justify-content:space-between; align-items:center;">
+        <div id="loggedInView" style="display: none; width: 100%; justify-content: space-between; align-items: center;">
             <div class="user-info">
                 <img id="userAvatar" src="" class="user-avatar" alt="Avatar">
                 <div>
-                    <div id="userName" class="user-name">שם משתמש</div>
-                    <div id="syncStatus" class="cloud-status"><span class="status-dot"></span> מנותק</div>
+                    <div id="userName" class="user-name"></div>
+                    <div id="syncStatus" class="cloud-status"><span class="status-dot"></span> מתחבר...</div>
                 </div>
             </div>
             <div>
@@ -369,9 +375,10 @@
         </div>
 
         <div class="filters-container">
-            <select id="categoryFilter"><option value="">📂 כל הקטגוריות</option></select>
+            <select id="categoryFilter"><option value="">📂 טוען קטגוריות...</option></select>
+            <datalist id="categoriesDatalist"></datalist>
             <select id="sortOrder">
-                <option value="date-new" selected>📅 תאריך (הכי חדש = הכי גבוה)</option>
+                <option value="date-new" selected="">📅 תאריך (הכי חדש = הכי גבוה)</option>
                 <option value="name">🔤 שם (א-ת)</option>
             </select>
         </div>
@@ -414,16 +421,16 @@
     <details class="glass-panel">
         <summary>הוספת פריט חדש ידנית</summary>
         <form id="addItemForm">
-            <textarea id="itemContent" rows="2" required placeholder="הדבק כאן קישור או פקודה..."></textarea>
+            <textarea id="itemContent" rows="2" required="" placeholder="הדבק כאן קישור או פקודה..."></textarea>
             <input type="text" id="itemDescription" placeholder="תיאור הפריט">
             <input type="text" id="itemCategory" list="categoriesDatalist" placeholder="קטגוריה">
-            <datalist id="categoriesDatalist"></datalist>
             <input type="text" id="itemNote" placeholder="הערה אישית (אופציונלי)">
             <button type="submit">הוסף למאגר</button>
         </form>
     </details>
 
-    <div id="listContainer" class="list-container"></div>
+    <div id="listContainer" class="list-container">
+        </div>
 
     <div id="trashModal">
         <div class="modal-content">
@@ -448,8 +455,9 @@
     <script id="app-state" type="application/json">{}</script>
 
     <script type="module">
+        // Import Firebase Functions - Updated to include signInWithRedirect and getRedirectResult
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getAuth, signInWithRedirect, getRedirectResult, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         // === Configuration ===
@@ -482,6 +490,23 @@
             app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             db = getFirestore(app);
+            
+            // Handle Redirect Result (Fix for APK Login flow)
+            getRedirectResult(auth)
+                .then((result) => {
+                    if (result) {
+                        console.log("Redirect login successful", result.user);
+                    }
+                })
+                .catch((error) => {
+                    console.error("Redirect login error:", error);
+                    // Ignore typical user cancellation or interruption errors
+                    if (error.code !== 'auth/popup-closed-by-user' && error.code !== 'auth/cancelled-popup-request') {
+                         // Only alert on real errors, maybe toast?
+                         // alert("התחברות נכשלה: " + error.message);
+                    }
+                });
+
         } catch (e) { console.error("Firebase Init Error:", e); }
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -509,9 +534,10 @@
             });
             window.addEventListener('click', () => closeAllMenus());
 
-            document.getElementById('searchInput')?.addEventListener('input', () => window.requestAnimationFrame(renderList));
-            document.getElementById('categoryFilter')?.addEventListener('change', renderList);
-            document.getElementById('sortOrder')?.addEventListener('change', renderList);
+            // Use requestAnimationFrame for smoother typing search
+            document.getElementById('searchInput')?.addEventListener('input', () => window.requestAnimationFrame(() => renderList()));
+            document.getElementById('categoryFilter')?.addEventListener('change', () => renderList());
+            document.getElementById('sortOrder')?.addEventListener('change', () => renderList());
             document.getElementById('addItemForm')?.addEventListener('submit', handleAdd);
             
             document.getElementById('toggleDarkModeBtn')?.addEventListener('click', toggleTheme);
@@ -542,7 +568,7 @@
         function loadLocalData() {
             try {
                 const embedded = document.getElementById('app-state').textContent;
-                if(embedded) {
+                if(embedded && embedded !== "{}") {
                     const parsed = JSON.parse(embedded);
                     if (parsed.items) state.items = parsed.items;
                     if (parsed.trash) state.trash = parsed.trash;
@@ -584,29 +610,31 @@
                     document.getElementById('loggedOutView').style.display = 'none';
                     document.getElementById('loggedInView').style.display = 'flex';
                     document.getElementById('userName').textContent = user.displayName;
-                    document.getElementById('userAvatar').src = user.photoURL;
+                    const avatar = document.getElementById('userAvatar');
+                    if (user.photoURL) avatar.src = user.photoURL;
+                    
                     updateSyncStatus('syncing');
                     if (state.unsubscribe) state.unsubscribe();
                     state.unsubscribe = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
                         if (docSnap.exists()) {
                             const d = docSnap.data();
-                            if (JSON.stringify(d.items || []) !== JSON.stringify(state.items) || JSON.stringify(d.trash || []) !== JSON.stringify(state.trash)) {
+                            // Check if cloud data is actually different to avoid loop
+                            const cloudItemsStr = JSON.stringify(d.items || []);
+                            const cloudTrashStr = JSON.stringify(d.trash || []);
+                            const localItemsStr = JSON.stringify(state.items);
+                            const localTrashStr = JSON.stringify(state.trash);
+
+                            if (cloudItemsStr !== localItemsStr || cloudTrashStr !== localTrashStr) {
                                 state.items = d.items || [];
                                 state.trash = d.trash || [];
-                                saveData(true);
+                                saveData(true); // Save to local but don't push back to cloud immediately
                                 updateCategoryDropdowns(); 
                                 renderList();
                             }
                             updateSyncStatus('online');
                         } else {
-                            // NEW USER LOGIC: FORCE EMPTY STATE
-                            // This prevents pushing local test data to a new user
-                            state.items = [];
-                            state.trash = [];
-                            saveData(true); // Wipe local
-                            pushToCloud();  // Init cloud with empty
-                            renderList();
-                            updateCategoryDropdowns();
+                            // New user logic
+                            pushToCloud(); 
                             updateSyncStatus('online');
                             showToast("חשבון חדש נוצר בהצלחה!");
                         }
@@ -620,11 +648,18 @@
             });
         }
 
+        // *** FIX: Use signInWithRedirect for APK support ***
         async function cloudLogin() {
             const provider = new GoogleAuthProvider();
             provider.setCustomParameters({ prompt: 'select_account' });
-            try { await signInWithPopup(auth, provider); } catch (e) { alert(e.message); }
+            try { 
+                await signInWithRedirect(auth, provider); 
+            } catch (e) { 
+                console.error("Login call failed", e);
+                alert("שגיאת התחברות: " + e.message); 
+            }
         }
+
         async function cloudLogout() { if(auth) { await signOut(auth); location.reload(); } }
         async function switchAccount() { if(confirm('החלף חשבון?')) { if (state.unsubscribe) state.unsubscribe(); await signOut(auth); cloudLogin(); } }
 
@@ -673,15 +708,20 @@
             else select.value = "";
         }
 
-        // === Render Logic ===
-        function renderList() {
+        // === Render Logic (Protected against crashes) ===
+        function renderList(e = null) {
             const container = document.getElementById('listContainer');
             if(!container) return;
             container.innerHTML = '';
             
-            const query = document.getElementById('searchInput')?.value.toLowerCase() || '';
-            const catFilter = document.getElementById('categoryFilter')?.value || '';
-            const sort = document.getElementById('sortOrder')?.value || 'date-new';
+            // Safer DOM access
+            const searchInput = document.getElementById('searchInput');
+            const catSelect = document.getElementById('categoryFilter');
+            const sortSelect = document.getElementById('sortOrder');
+
+            const query = searchInput ? searchInput.value.toLowerCase() : '';
+            const catFilter = catSelect ? catSelect.value : '';
+            const sort = sortSelect ? sortSelect.value : 'date-new';
 
             let sortedFullList = [...state.items];
             const baseSort = (a, b) => {
@@ -714,16 +754,17 @@
                 if (!state.showDuplicates && i.isDup && state.items.indexOf(i) !== state.items.findIndex(x => x.content.toLowerCase() === i.content.toLowerCase())) return false;
                 
                 const matchesSearch = !query || 
-                                      i.content.toLowerCase().includes(query) || 
-                                      i.description.toLowerCase().includes(query) || 
-                                      i.category.toLowerCase().includes(query) || 
+                                      (i.content && i.content.toLowerCase().includes(query)) || 
+                                      (i.description && i.description.toLowerCase().includes(query)) || 
+                                      (i.category && i.category.toLowerCase().includes(query)) || 
                                       (i.note && i.note.toLowerCase().includes(query));
                 
                 const matchesCat = !catFilter || i.category === catFilter;
                 return matchesSearch && matchesCat;
             });
 
-            document.getElementById('itemCount').textContent = `מציג ${filtered.length} מתוך ${state.items.length}`;
+            const countEl = document.getElementById('itemCount');
+            if(countEl) countEl.textContent = `מציג ${filtered.length} מתוך ${state.items.length}`;
 
             const pinnedItems = filtered.filter(i => i.isPinned);
             const regularItems = filtered.filter(i => !i.isPinned);
@@ -1011,6 +1052,18 @@
         function initTheme() { if(localStorage.getItem(STORAGE_KEY+'_theme')==='light') { document.body.classList.remove('dark-mode'); document.getElementById('toggleDarkModeBtn').textContent='🌙'; } }
         function toggleTheme() { document.body.classList.toggle('dark-mode'); localStorage.setItem(STORAGE_KEY+'_theme', document.body.classList.contains('dark-mode')?'dark':'light'); document.getElementById('toggleDarkModeBtn').textContent=document.body.classList.contains('dark-mode')?'☀️':'🌙'; }
         function toggleDuplicates() { state.showDuplicates=!state.showDuplicates; renderList(); }
+
+        // --- רישום Service Worker ---
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(registration => {
+                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    }, err => {
+                        console.log('ServiceWorker registration failed: ', err);
+                    });
+            });
+        }
     </script>
-</body>
-</html>
+
+</body></html>
