@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Link Manager Pro - Clean Start</title>
+    <title>Link Manager Pro - Safe Sync</title>
     <style>
         :root {
             --bg-gradient: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
@@ -340,7 +340,7 @@
 <body class="dark-mode">
 
     <header>
-        <h1>Link Manager Pro <span style="font-size:0.8rem; opacity:0.7; margin-right:10px;">(Clean Start)</span></h1>
+        <h1>Link Manager Pro <span style="font-size:0.8rem; opacity:0.7; margin-right:10px;">(Safe Sync)</span></h1>
         <div id="itemCount">טוען נתונים...</div>
     </header>
 
@@ -454,14 +454,14 @@
 
         // === Configuration ===
         const firebaseConfig = {
-    apiKey: "AIzaSyDwofGCJUWkdLGWyXK7_UBAbbC39FXnAmI",
-    authDomain: "linkmeir-dada4.firebaseapp.com",
-    projectId: "linkmeir-dada4",
-    storageBucket: "linkmeir-dada4.firebasestorage.app",
-    messagingSenderId: "933486826829",
-    appId: "1:933486826829:web:6e61498d88a55623c65304",
-    measurementId: "G-46D3WMVFK5"
-};
+            apiKey: "AIzaSyDwofGCJUWkdLGWyXK7_UBAbbC39FXnAmI",
+            authDomain: "linkmeir-dada4.firebaseapp.com",
+            projectId: "linkmeir-dada4",
+            storageBucket: "linkmeir-dada4.firebasestorage.app",
+            messagingSenderId: "933486826829",
+            appId: "1:933486826829:web:6e61498d88a55623c65304",
+            measurementId: "G-46D3WMVFK5"
+        };
 
         const STORAGE_KEY = 'LinkManager_Pro_V7';
         const URL_REGEX = /^(https?:\/\/[^\s]+|t\.me\/[^\s]+|@\w+|[a-zA-Z0-9.-]+\.[a-z]{2,}\S*)/;
@@ -587,28 +587,35 @@
                     document.getElementById('userAvatar').src = user.photoURL;
                     updateSyncStatus('syncing');
                     if (state.unsubscribe) state.unsubscribe();
+                    
                     state.unsubscribe = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
                         if (docSnap.exists()) {
+                            // המסמך קיים בענן - טען נתונים
                             const d = docSnap.data();
                             if (JSON.stringify(d.items || []) !== JSON.stringify(state.items) || JSON.stringify(d.trash || []) !== JSON.stringify(state.trash)) {
                                 state.items = d.items || [];
                                 state.trash = d.trash || [];
-                                saveData(true);
+                                saveData(true); // שמור מקומית בלי לדחוף חזרה
                                 updateCategoryDropdowns(); 
                                 renderList();
                             }
                             updateSyncStatus('online');
                         } else {
-                            // NEW USER LOGIC: FORCE EMPTY STATE
-                            // This prevents pushing local test data to a new user
-                            state.items = [];
-                            state.trash = [];
-                            saveData(true); // Wipe local
-                            pushToCloud();  // Init cloud with empty
-                            renderList();
-                            updateCategoryDropdowns();
-                            updateSyncStatus('online');
-                            showToast("חשבון חדש נוצר בהצלחה!");
+                            // !!! כאן התיקון הקריטי !!!
+                            // אם המסמך לא קיים בענן, נבדוק אם יש נתונים מקומיים במקום למחוק אותם.
+                            
+                            if (state.items.length > 0 || state.trash.length > 0) {
+                                // יש נתונים מקומיים! נעלה אותם לענן במקום למחוק
+                                pushToCloud();
+                                updateSyncStatus('online');
+                                showToast("נתונים מקומיים סונכרנו לענן");
+                            } else {
+                                // משתמש חדש באמת (ריק גם במחשב וגם בענן)
+                                pushToCloud(); 
+                                updateCategoryDropdowns();
+                                updateSyncStatus('online');
+                                showToast("חשבון חדש נוצר בהצלחה!");
+                            }
                         }
                     }, () => updateSyncStatus('error'));
                 } else {
