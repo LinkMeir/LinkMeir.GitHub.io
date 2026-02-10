@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Link Manager Pro - Safe Sync</title>
+    <title>Link Manager Pro - Smart Merge</title>
     <style>
         :root {
             --bg-gradient: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%);
@@ -340,7 +340,7 @@
 <body class="dark-mode">
 
     <header>
-        <h1>Link Manager Pro <span style="font-size:0.8rem; opacity:0.7; margin-right:10px;">(Safe Sync)</span></h1>
+        <h1>Link Manager Pro <span style="font-size:0.8rem; opacity:0.7; margin-right:10px;">(גרסה מאובטחת)</span></h1>
         <div id="itemCount">טוען נתונים...</div>
     </header>
 
@@ -452,7 +452,6 @@
         import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // === Configuration ===
         const firebaseConfig = {
             apiKey: "AIzaSyDwofGCJUWkdLGWyXK7_UBAbbC39FXnAmI",
             authDomain: "linkmeir-dada4.firebaseapp.com",
@@ -472,12 +471,12 @@
             user: null,
             unsubscribe: null,
             showDuplicates: true,
-            toastTimeout: null
+            toastTimeout: null,
+            isInitialized: false // New flag to prevent overwrite on first load
         };
 
         let app, auth, db;
 
-        // === Initialization ===
         try {
             app = initializeApp(firebaseConfig);
             auth = getAuth(app);
@@ -494,7 +493,6 @@
             setupFirebaseListeners();
         });
 
-        // === Event Listeners ===
         function setupEventListeners() {
             document.querySelectorAll('.drop-trigger').forEach(btn => {
                 btn.addEventListener('click', (e) => {
@@ -538,11 +536,10 @@
             document.getElementById('downloadSourceBtn')?.addEventListener('click', downloadSource);
         }
 
-        // === Core Logic ===
         function loadLocalData() {
             try {
                 const embedded = document.getElementById('app-state').textContent;
-                if(embedded) {
+                if(embedded && embedded !== "{}") {
                     const parsed = JSON.parse(embedded);
                     if (parsed.items) state.items = parsed.items;
                     if (parsed.trash) state.trash = parsed.trash;
@@ -575,7 +572,16 @@
             if(state.trash.length !== initialLen) saveData();
         }
 
-        // === Firebase ===
+        // === SMART MERGE LOGIC ===
+        function mergeData(localItems, cloudItems) {
+            const map = new Map();
+            // 1. Add all local items
+            localItems.forEach(i => map.set(i.id, i));
+            // 2. Add/Overwrite with cloud items (Cloud is generally authority, but we keep local if cloud missing)
+            cloudItems.forEach(i => map.set(i.id, i));
+            return Array.from(map.values());
+        }
+
         function setupFirebaseListeners() {
             if (!auth) return;
             onAuthStateChanged(auth, (user) => {
@@ -586,40 +592,65 @@
                     document.getElementById('userName').textContent = user.displayName;
                     document.getElementById('userAvatar').src = user.photoURL;
                     updateSyncStatus('syncing');
+                    
                     if (state.unsubscribe) state.unsubscribe();
                     
                     state.unsubscribe = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
+                        let cloudItems = [];
+                        let cloudTrash = [];
+                        
                         if (docSnap.exists()) {
-                            // המסמך קיים בענן - טען נתונים
                             const d = docSnap.data();
-                            if (JSON.stringify(d.items || []) !== JSON.stringify(state.items) || JSON.stringify(d.trash || []) !== JSON.stringify(state.trash)) {
-                                state.items = d.items || [];
-                                state.trash = d.trash || [];
-                                saveData(true); // שמור מקומית בלי לדחוף חזרה
-                                updateCategoryDropdowns(); 
-                                renderList();
-                            }
-                            updateSyncStatus('online');
-                        } else {
-                            // !!! כאן התיקון הקריטי !!!
-                            // אם המסמך לא קיים בענן, נבדוק אם יש נתונים מקומיים במקום למחוק אותם.
-                            
-                            if (state.items.length > 0 || state.trash.length > 0) {
-                                // יש נתונים מקומיים! נעלה אותם לענן במקום למחוק
-                                pushToCloud();
-                                updateSyncStatus('online');
-                                showToast("נתונים מקומיים סונכרנו לענן");
+                            cloudItems = d.items || [];
+                            cloudTrash = d.trash || [];
+                        }
+
+                        // === SMART SYNC LOGIC ===
+                        // אם זו הפעם הראשונה בטעינה, ומצאנו שיש מידע מקומי אבל הענן ריק (או חלקי),
+                        // אנחנו ממזגים כדי לא לאבד כלום.
+                        
+                        if (!state.isInitialized) {
+                            if (state.items.length > 0) {
+                                // יש מידע מקומי! לא לדרוס אותו עם ענן ריק.
+                                // נבצע מיזוג: מה שיש בטלפון + מה שיש בענן.
+                                const mergedItems = mergeData(state.items, cloudItems);
+                                const mergedTrash = mergeData(state.trash, cloudTrash);
+                                
+                                state.items = mergedItems;
+                                state.trash = mergedTrash;
+                                
+                                // דוחפים חזרה לענן את התוצאה הממוזגת
+                                saveData(false); 
+                                showToast("בוצע מיזוג נתונים חכם");
                             } else {
-                                // משתמש חדש באמת (ריק גם במחשב וגם בענן)
-                                pushToCloud(); 
-                                updateCategoryDropdowns();
-                                updateSyncStatus('online');
-                                showToast("חשבון חדש נוצר בהצלחה!");
+                                // אין מידע מקומי, פשוט קח מה שיש בענן (גם אם זה ריק)
+                                state.items = cloudItems;
+                                state.trash = cloudTrash;
+                                saveData(true); // שמור מקומית
+                            }
+                            state.isInitialized = true;
+                        } else {
+                            // אם אנחנו כבר אחרי הטעינה הראשונית, הענן הוא הקובע (סנכרון רגיל)
+                            if (docSnap.exists()) {
+                                if (JSON.stringify(cloudItems) !== JSON.stringify(state.items)) {
+                                    state.items = cloudItems;
+                                    state.trash = cloudTrash;
+                                    saveData(true);
+                                }
                             }
                         }
-                    }, () => updateSyncStatus('error'));
+
+                        updateCategoryDropdowns(); 
+                        renderList();
+                        updateSyncStatus('online');
+                        
+                    }, (err) => {
+                        console.error("Sync error:", err);
+                        updateSyncStatus('error');
+                    });
                 } else {
                     state.user = null;
+                    state.isInitialized = false; // Reset init flag
                     if (state.unsubscribe) state.unsubscribe();
                     document.getElementById('loggedOutView').style.display = 'flex';
                     document.getElementById('loggedInView').style.display = 'none';
@@ -639,7 +670,7 @@
             if (!state.user || !db) return;
             updateSyncStatus('syncing');
             try {
-                await setDoc(doc(db, "users", state.user.uid), { items: state.items, trash: state.trash, lastUpdated: new Date().toISOString() });
+                await setDoc(doc(db, "users", state.user.uid), { items: state.items, trash: state.trash, lastUpdated: new Date().toISOString() }, { merge: true });
                 updateSyncStatus('online');
             } catch (e) { updateSyncStatus('error'); }
         }
@@ -652,7 +683,6 @@
             el.innerHTML = `<span class="status-dot ${status}"></span> ${status === 'online' ? 'מחובר' : status === 'syncing' ? 'מסנכרן...' : 'שגיאה'}`;
         }
 
-        // === Helpers ===
         function escapeHtml(text) { return text ? text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;") : ''; }
         function closeAllMenus() { document.querySelectorAll('.dropdown-content, .drop-trigger').forEach(el => el.classList.remove('show', 'active')); }
 
@@ -680,7 +710,6 @@
             else select.value = "";
         }
 
-        // === Render Logic ===
         function renderList() {
             const container = document.getElementById('listContainer');
             if(!container) return;
